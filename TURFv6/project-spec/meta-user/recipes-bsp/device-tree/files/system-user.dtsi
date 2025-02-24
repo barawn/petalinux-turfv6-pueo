@@ -1,0 +1,85 @@
+/include/ "system-conf.dtsi"
+/ {
+   reserved-memory {
+     #address-cells = <2>;
+     #size-cells = <2>;
+     ranges;
+
+     reserved: buffer@0x70000000 {
+        no-map;
+	reg = <0x0 0x70000000 0x0 0x100000 >;
+     };
+   };
+   reserved-driver@0 {
+     compatible = "xlnx,reserved-memory";
+     memory-region = <&reserved>;
+   };
+};
+
+
+
+#include "include/dt-bindings/phy/phy.h"
+#include "include/dt-bindings/gpio/gpio.h"
+
+&gem0 {
+      status = "okay";
+      ethernet_phy1: ethernet-phy@1 {
+      		     compatible = "ethernet-phy-ieee802.3-c22";		     
+		     device_type = "ethernet-phy";
+		     reg = <1>;
+      };
+};
+
+&qspi {
+      u-boot,dm-pre-reloc;
+      #address-cells = <1>;
+      #size-cells = <0>;
+      status = "okay";
+      num-cs = <1>;
+      has-io-mode = <1>;
+      flash0: flash@0 {
+              compatible = "jedec,spi-nor";
+              reg = <0x0>;
+              #address-cells = <1>;
+              #size-cells = <1>;
+              spi-tx-bus-width = <1>;
+              spi-rx-bus-width = <1>;
+              spi-max-frequency = <16000000>;
+      };
+};
+
+#include "include/dt-bindings/interrupt-controller/irq.h"
+
+&i2c0 {
+     pmic0: da9062@58 {
+            compatible = "dlg,da9062";
+	    reg = <0x58>;
+	    interrupt-parent = <&gpio>;
+	    interrupts = <2 IRQ_TYPE_LEVEL_LOW>;
+	    interrupt-controller;
+
+	    rtc {
+	    	compatible = "dlg,da9062-rtc";
+	    };
+
+	    regulators {
+	    	       DA9062_LDO1: ldo1 {
+		       		    regulator-name = "LDO_1";
+				    regulator-min-microvolt = <1800000>;
+				    regulator-max-microvolt = <1800000>;
+				    regulator-always-on;
+		       };
+		       DA9062_LDO4: ldo4 {
+		       		    regulator-name = "LDO_4";
+				    regulator-min-microvolt = <2500000>;
+				    regulator-max-microvolt = <2500000>;
+				    regulator-always-on;
+		       };
+	    };
+     };
+};
+
+&dcc {
+     status = "okay";
+};
+

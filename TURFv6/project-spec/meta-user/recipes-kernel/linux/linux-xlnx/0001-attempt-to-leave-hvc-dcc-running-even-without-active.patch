@@ -1,0 +1,179 @@
+From 4034aa4ff7980840fb0c7d7a3ca98a417c09cca1 Mon Sep 17 00:00:00 2001
+From: Patrick Allison <allison.122@osu.edu>
+Date: Sat, 8 Feb 2025 23:16:44 +0000
+Subject: [PATCH] attempt to leave hvc-dcc running even without active JTAG
+ debugger
+
+---
+ arch/arm64/include/asm/dcc.h |  8 ++++
+ drivers/tty/hvc/hvc_dcc.c    | 75 +++++++++++++++++++++++++++++++++---
+ 2 files changed, 78 insertions(+), 5 deletions(-)
+
+diff --git a/arch/arm64/include/asm/dcc.h b/arch/arm64/include/asm/dcc.h
+index ebd9fb4720c0..b56ebb2df666 100644
+--- a/arch/arm64/include/asm/dcc.h
++++ b/arch/arm64/include/asm/dcc.h
+@@ -20,6 +20,14 @@ static inline u32 __dcc_getstatus(void)
+ 	return read_sysreg(mdccsr_el0);
+ }
+ 
++static inline u32 __dcc_getu32(void)
++{
++	u32 dw = read_sysreg(dbgdtrrx_el0);
++	isb();
++
++	return dw;
++}
++
+ static inline char __dcc_getchar(void)
+ {
+ 	char c = read_sysreg(dbgdtrrx_el0);
+diff --git a/drivers/tty/hvc/hvc_dcc.c b/drivers/tty/hvc/hvc_dcc.c
+index b7c13050621d..8ea2a3ce2be3 100644
+--- a/drivers/tty/hvc/hvc_dcc.c
++++ b/drivers/tty/hvc/hvc_dcc.c
+@@ -23,14 +23,49 @@
+ #define DCC_INBUF_SIZE		128
+ #define DCC_OUTBUF_SIZE		1024
+ 
++/*
++ * We need a way to guarantee that we won't spin forever
++ * if the JTAG handler's not present.
++ *
++ * What I'd really like is a way to open/close the JTAG
++ * port. Doing that requires a lot though. Maybe if the
++ * test fails, we just set a bool to false, and then
++ * on the rx chars call we check to see if the bool is
++ * false and if the DCC_STATUS_RX bit is set, we
++ * set the bool to true.
++ *
++ * This is nominally a problem if you don't open the JTAG
++ * port at first, and then later you do and then close
++ * it again. So maybe we add a magic number through the
++ * DCC to indicate "close"? Worth a shot.
++ *
++ * For this we ALSO need to modify the DCC functions
++ * because we don't want a char anymore.
++ */
++
+ /* Lock to serialize access to DCC fifo */
+ static DEFINE_SPINLOCK(dcc_lock);
+ 
+ static DEFINE_KFIFO(inbuf, unsigned char, DCC_INBUF_SIZE);
+ static DEFINE_KFIFO(outbuf, unsigned char, DCC_OUTBUF_SIZE);
+ 
++/*
++ * Set if JTAG is detected.
++ * There's no multiprocessor issues here since we're only
++ * building this modification to support cases with
++ * CONFIG_HVC_DCC_SERIALIZE_SMP. Which means all of the
++ * actual put/get calls are forced to be on CPU0.
++ *
++ * IOW: this is a hack and a half.
++ */
++bool dcc_is_open = false;
++
++/* Magic key. */
++#define DCC_CLOSE_KEY 0xDEADBEEF
++
+ static void dcc_uart_console_putchar(struct uart_port *port, int ch)
+ {
++        if (!dcc_is_open) return;
+ 	while (__dcc_getstatus() & DCC_STATUS_TX)
+ 		cpu_relax();
+ 
+@@ -54,10 +89,13 @@ static int __init dcc_early_console_setup(struct earlycon_device *device,
+ 
+ EARLYCON_DECLARE(dcc, dcc_early_console_setup);
+ 
++/* with CONFIG_HVC_DCC_SERIALIZE_SMP this only gets called on #0 */
+ static int hvc_dcc_put_chars(uint32_t vt, const char *buf, int count)
+ {
+ 	int i;
+ 
++	/* just throw away the chars if we're not open */
++	if (!dcc_is_open) return count;
+ 	for (i = 0; i < count; i++) {
+ 		while (__dcc_getstatus() & DCC_STATUS_TX)
+ 			cpu_relax();
+@@ -68,13 +106,23 @@ static int hvc_dcc_put_chars(uint32_t vt, const char *buf, int count)
+ 	return count;
+ }
+ 
++/* with CONFIG_HVC_DCC_SERIALIZE_SMP this only gets called on #0 */
+ static int hvc_dcc_get_chars(uint32_t vt, char *buf, int count)
+ {
+ 	int i;
+ 
+ 	for (i = 0; i < count; ++i)
+-		if (__dcc_getstatus() & DCC_STATUS_RX)
+-			buf[i] = __dcc_getchar();
++	        if (__dcc_getstatus() & DCC_STATUS_RX) {
++		        u32 tmp = __dcc_getu32();
++			if (tmp == DCC_CLOSE_KEY) {
++			        dcc_is_open = false;
++				// have to modify i here, we didn't read
++				i--;
++			} else {
++			        dcc_is_open = true;
++			        buf[i] = tmp & 0xFF;
++			}
++		}
+ 		else
+ 			break;
+ 
+@@ -107,14 +155,22 @@ static bool hvc_dcc_check(void)
+ 	/* Write a test character to check if it is handled */
+ 	__dcc_putchar('\n');
+ 
++	/* if it is, mark open. otherwise, mark not open and wait
++	   until a char is received. this might work...
++	   Otherwise the other trick we could do is to check
++	   in the tx call if DCC_STATUS_TX has cleared, and if it
++	   has, open it. */
+ 	while (time_is_after_jiffies(time)) {
+ 		if (!(__dcc_getstatus() & DCC_STATUS_TX)) {
++		        dcc_is_open = true;
+ 			dcc_core0_available = true;
+ 			return true;
+ 		}
+ 	}
+-
+-	return false;
++	pr_warn("hvc_dcc: JTAG handler not present, waiting until data rx\n");
++	dcc_is_open = false;
++	dcc_core0_available = true;
++	return true;
+ }
+ 
+ /*
+@@ -215,10 +271,12 @@ static int hvc_dcc0_get_chars(u32 vt, char *buf, int count)
+ {
+ 	int len;
+ 	unsigned long irqflags;
+-
++	bool prvopen, nxtopen;
++	
+ 	if (!IS_ENABLED(CONFIG_HVC_DCC_SERIALIZE_SMP))
+ 		return hvc_dcc_get_chars(vt, buf, count);
+ 
++	prvopen = dcc_is_open;
+ 	spin_lock_irqsave(&dcc_lock, irqflags);
+ 
+ 	if (smp_processor_id() || (!kfifo_is_empty(&inbuf))) {
+@@ -243,8 +301,15 @@ static int hvc_dcc0_get_chars(u32 vt, char *buf, int count)
+ 	 * read the data from DCC.
+ 	 */
+ 	len = hvc_dcc_get_chars(vt, buf, count);
++	nxtopen = dcc_is_open;
+ 	spin_unlock_irqrestore(&dcc_lock, irqflags);
+ 
++	if (nxtopen != prvopen) {
++	        if (nxtopen)
++		        pr_info("hvc_dcc: opening JTAG UART console\n");
++		else
++		        pr_info("hvc_dcc: closing JTAG UART console\n");
++	}
+ 	return len;
+ }
+ 
