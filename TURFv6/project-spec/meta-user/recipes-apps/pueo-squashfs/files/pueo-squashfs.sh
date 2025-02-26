@@ -129,16 +129,43 @@ uncompress_and_copy_to_libfirmware() {
 	DEST=${PUEOLIBBITDIR}/$BASE
     fi
 
-    echo "Loading $FN to ${DEST}"
-    ${PROG} $FN > ${DEST}
-    if [ $SLOTDIR != $BASEPATH ] ; then
-	LINKPATH=${PUEOLIBBITDIR}/${SLOTNUM}
-	echo "Linking ${LINKPATH} to ${DEST}"
+    # this is common for both DTBOs and BITs
+    LINKPATH=${PUEOLIBBITDIR}/${SLOTNUM}
+    
+    # detect DTBOs
+    DESTFN=$(basename $DEST)
+    EXTN="${DESTFN##*.}"
+    if [ $EXTN = "tar" ] ; then
+	echo "Extracting $DESTFN to $PUEOLIBBITDIR"
+	# strip tar and create dtbo and bitname
+	DTBOFN=$(basename $DESTFN .tar),dtbo
+	BITFN=$(basename $DESTFN .tar).bit
+	${PROG} $FN | tar -C ${PUEOLIBBITDIR}
+	if [ -e ${PUEOLIBBITDIR}/${DTBOFN} ] ; then
+	    LINKTGT=${PUEOLIBBITDIR}/${DTBOFN}
+	elif [ -e ${PUEOLIBBITDIR}/${BITFN} ] ; then
+	    LINKTGT=${PUEOLIBBITDIR}/${BITFN}
+	else
+	    echo "Couldn't find anything to link inside $DESTFN !!"
+	    return 1
+	fi
+	
+	echo "Linking ${LINKPATH} to ${LINKTGT}"
 	if [ -f ${LINKPATH} ] ; then
 	    rm ${LINKPATH}
 	fi
 	ln -s ${DEST} ${LINKPATH}
-    fi
+    else
+	echo "Loading $FN to ${DEST}"
+	${PROG} $FN > ${DEST}
+	if [ $SLOTDIR != $BASEPATH ] ; then
+	    echo "Linking ${LINKPATH} to ${DEST}"
+	    if [ -f ${LINKPATH} ] ; then
+		rm ${LINKPATH}
+	    fi
+	    ln -s ${DEST} ${LINKPATH}
+	fi
+    fi    
 }
 
 soft_slotname() {
@@ -299,11 +326,36 @@ umount_pueofs() {
 }
 
 cache_eeprom() {
-    EEPROM="/sys/bus/i2c/devices/1-0050/eeprom"
+    SURFEEPROM="/sys/bus/i2c/devices/1-0050/eeprom"
+    MMCEEPROMMNTCMD="mount /media"
+    MMCEEPROMUMNTCMD="umount /media"
+    MMCEEPROM="/media/eeprom"
+    MMCTEST=`blkid /dev/mmcblk0p1 | awk {'print $3'}`    
     CACHE="/tmp/pueo/eeprom"
     if [ ! -f ${CACHE} ] ; then
-	echo "Caching ${EEPROM} to ${CACHE}"
-	cat $EEPROM > $CACHE
+	if [ -e ${SURFEEPROM} ] ; then
+	    EEPROM=$SURFEEPROM
+	    echo "Caching ${EEPROM} to ${CACHE}"
+	    cat $EEPROM > $CACHE
+	elif [ ! -z ${MMCTEST} ] ; then
+	    ${MMCEEPROMMNTCMD}
+	    RETVAL=$?
+	    if [ $RETVAL -ne 0 ] ; then
+		echo "Mounting MMC failed!"
+		return 1
+	    fi
+	    if [ -e ${MMCEEPROM} ] ; then
+		echo "Caching ${MMCEEPROM} to ${EEPROM}"
+		cat ${MMCEEPROM} > $CACHE
+	    else
+		echo "Cannot find an EEPROM to cache!"
+		return 1
+	    fi
+	    ${MMCEEPROMUMNTCMD}
+	else
+	    echo "Cannot find an EEPROM to cache!"
+	    return 1
+	fi	    
     fi
 }
 

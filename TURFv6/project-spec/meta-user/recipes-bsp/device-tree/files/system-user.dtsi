@@ -58,6 +58,18 @@
 	    interrupts = <2 IRQ_TYPE_LEVEL_LOW>;
 	    interrupt-controller;
 
+	    /*
+	     * I SERIOUSLY need to find a way to disable
+	     * this goddamn watchdog. Currently after it reboots
+	     * it does not disable the watchdog for some reason
+	     * and then after a minute or so in u-boot it just
+	     * DIES and apparently the OTP value for it is
+	     * to just KILL THE EFFING POWER
+	     */
+	    watchdog {
+	    	compatible = "dlg,da9062-watchdog";
+	    };
+
 	    rtc {
 	    	compatible = "dlg,da9062-rtc";
 	    };

@@ -3,6 +3,7 @@ FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}:"
 SRC_URI:append = " file://bsp.cfg"
 KERNEL_FEATURES:append = " bsp.cfg"
 SRC_URI += "file://surf_user.cfg \
+	    file://0001-add-debugging-to-DA9062-because-it-s-a-disaster.patch \
             file://0001-backport-DCC-uart-serialization-option.patch \
             file://0001-add-partial-readback-support.patch \
             file://0001-fpga-zynqmp-Make-word-align-the-configuration-data.patch \
@@ -22,5 +23,6 @@ SRC_URI += "file://surf_user.cfg \
             file://0001-mfd-da9062-Remove-IRQ-requirement.patch \
             file://user_2025-02-12-20-30-00.cfg \
             file://user_2025-02-12-21-28-00.cfg \
+            file://user_2025-02-25-23-16-00.cfg \
             "
 

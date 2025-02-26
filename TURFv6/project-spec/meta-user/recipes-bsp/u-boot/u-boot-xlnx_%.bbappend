@@ -13,7 +13,7 @@ do_configure:append:microblaze () {
 		install ${WORKDIR}/config.mk ${B}/source/board/xilinx/microblaze-generic/
 	fi
 }
-SRC_URI += "file://user_surf6.cfg \
+SRC_URI += "file://user_turf6.cfg \
             file://user_2024-10-09-16-32-00.cfg \
             file://user_2024-10-09-16-45-00.cfg \
             file://user_2024-10-09-17-19-00.cfg \

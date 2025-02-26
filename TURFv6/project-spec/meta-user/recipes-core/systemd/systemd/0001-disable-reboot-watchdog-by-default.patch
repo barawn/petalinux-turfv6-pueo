@@ -1,0 +1,25 @@
+From 6fc6c9edb691eab9073e2ddc573915b024501e38 Mon Sep 17 00:00:00 2001
+From: Patrick Allison <allison.122@osu.edu>
+Date: Wed, 26 Feb 2025 18:35:36 +0000
+Subject: [PATCH 1/1] disable reboot watchdog by default
+
+---
+ src/core/system.conf.in | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/core/system.conf.in b/src/core/system.conf.in
+index e88280bd0a..9ce175fe23 100644
+--- a/src/core/system.conf.in
++++ b/src/core/system.conf.in
+@@ -30,7 +30,7 @@
+ #NUMAPolicy=default
+ #NUMAMask=
+ #RuntimeWatchdogSec=0
+-#RebootWatchdogSec=10min
++RebootWatchdogSec=0
+ #KExecWatchdogSec=0
+ #WatchdogDevice=
+ #CapabilityBoundingSet=
+-- 
+2.25.1
+
