@@ -154,7 +154,7 @@ uncompress_and_copy_to_libfirmware() {
 	if [ -f ${LINKPATH} ] ; then
 	    rm ${LINKPATH}
 	fi
-	ln -s ${DEST} ${LINKPATH}
+	ln -s ${LINKTGT} ${LINKPATH}
     else
 	echo "Loading $FN to ${DEST}"
 	${PROG} $FN > ${DEST}
