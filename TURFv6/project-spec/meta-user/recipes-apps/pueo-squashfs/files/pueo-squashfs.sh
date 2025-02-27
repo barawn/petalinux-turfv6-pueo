@@ -140,7 +140,7 @@ uncompress_and_copy_to_libfirmware() {
 	# strip tar and create dtbo and bitname
 	DTBOFN=$(basename $DESTFN .tar),dtbo
 	BITFN=$(basename $DESTFN .tar).bit
-	${PROG} $FN | tar -C ${PUEOLIBBITDIR}
+	${PROG} $FN | tar x -f- -C ${PUEOLIBBITDIR}
 	if [ -e ${PUEOLIBBITDIR}/${DTBOFN} ] ; then
 	    LINKTGT=${PUEOLIBBITDIR}/${DTBOFN}
 	elif [ -e ${PUEOLIBBITDIR}/${BITFN} ] ; then
@@ -345,7 +345,7 @@ cache_eeprom() {
 		return 1
 	    fi
 	    if [ -e ${MMCEEPROM} ] ; then
-		echo "Caching ${MMCEEPROM} to ${EEPROM}"
+		echo "Caching ${MMCEEPROM} to ${CACHE}"
 		cat ${MMCEEPROM} > $CACHE
 	    else
 		echo "Cannot find an EEPROM to cache!"
