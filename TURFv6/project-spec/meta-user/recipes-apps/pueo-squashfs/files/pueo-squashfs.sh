@@ -138,7 +138,7 @@ uncompress_and_copy_to_libfirmware() {
     if [ $EXTN = "tar" ] ; then
 	echo "Extracting $DESTFN to $PUEOLIBBITDIR"
 	# strip tar and create dtbo and bitname
-	DTBOFN=$(basename $DESTFN .tar),dtbo
+	DTBOFN=$(basename $DESTFN .tar).dtbo
 	BITFN=$(basename $DESTFN .tar).bit
 	${PROG} $FN | tar x -f- -C ${PUEOLIBBITDIR}
 	if [ -e ${PUEOLIBBITDIR}/${DTBOFN} ] ; then
@@ -384,17 +384,16 @@ wait $waitjob
 RETVAL=$?
 
 # wait up to a second for files to close
-BUSY=yes
-for i in `seq 1 100`; do
+DONE=no
+while [ $DONE == "no" ] ; do
     NFLS=`lsof | grep $PUEOFS | wc -l`
     if [ $NFLS -eq 0 ] ; then
 	echo "$PUEOFS became free after $i loops"
-	BUSY=no
-	break
+	DONE=yes
     fi
     if [ $i -eq 100 ] ; then
 	echo "Waited 100 loops: $PUEOFS still busy??"
-	break
+	DONE=yes
     fi
     sleep 0.01
 done
