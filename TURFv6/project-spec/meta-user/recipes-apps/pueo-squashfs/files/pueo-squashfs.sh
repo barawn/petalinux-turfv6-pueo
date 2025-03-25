@@ -384,17 +384,21 @@ wait $waitjob
 RETVAL=$?
 
 # wait up to a second for files to close
+BUSY=yes
 DONE=no
+i=0
 while [ $DONE == "no" ] ; do
     NFLS=`lsof | grep $PUEOFS | wc -l`
     if [ $NFLS -eq 0 ] ; then
 	echo "$PUEOFS became free after $i loops"
 	DONE=yes
+	BUSY=no
     fi
     if [ $i -eq 100 ] ; then
 	echo "Waited 100 loops: $PUEOFS still busy??"
 	DONE=yes
     fi
+    i=$(expr $i + 1)
     sleep 0.01
 done
 
